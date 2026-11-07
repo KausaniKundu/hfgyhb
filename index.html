@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Air Canvas - AI Gesture Drawing & Recognition</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- MediaPipe Hands & Camera Utils -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col items-center justify-between p-4 selection:bg-cyan-500 selection:text-black overflow-x-hidden">
+
+  <!-- Header -->
+  <header class="w-full max-w-6xl flex flex-col md:flex-row justify-between items-center py-3 border-b border-slate-800/80 mb-4 gap-3">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-teal-300 to-indigo-400">Air Canvas</h1>
+        <p class="text-xs text-slate-400">Fingertip Gesture Drawing & Shape Recognition</p>
+      </div>
+    </div>
+    
+    <!-- Status Badge -->
+    <div id="statusBadge" class="flex items-center space-x-2 bg-slate-900/80 border border-slate-800 px-3 py-1.5 rounded-full text-xs text-slate-400">
+      <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+      <span id="statusText">Initializing Camera...</span>
+    </div>
+  </header>
+
+  <!-- Main Canvas & Video Container -->
+  <main class="w-full max-w-6xl flex flex-col lg:flex-row gap-6 justify-center items-stretch flex-1">
+    
+    <!-- Viewport Box -->
+    <div class="relative flex-1 bg-slate-900/60 rounded-2xl border border-slate-800/80 shadow-2xl overflow-hidden flex items-center justify-center min-h-[480px]">
+      
+      <!-- Video Element (Hidden feed, mapped to canvas) -->
+      <video id="webcam" class="hidden" playsinline></video>
+      
+      <!-- Drawing Canvas Layer -->
+      <canvas id="paintCanvas" class="absolute inset-0 w-full h-full object-cover z-10 cursor-crosshair"></canvas>
+      
+      <!-- Gesture Help Overlay -->
+      <div class="absolute bottom-4 left-4 z-20 bg-slate-950/80 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-800/60 text-xs text-slate-300 space-y-1">
+        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> <strong>Index Finger Up:</strong> Draw</div>
+        <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-400"></span> <strong>Index + Middle Up:</strong> Hover / Pointer</div>
+      </div>
+    </div>
+
+    <!-- Controls Panel -->
+    <aside class="w-full lg:w-80 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between gap-6 backdrop-blur-sm">
+      <div class="space-y-5">
+        
+        <!-- Brush Color Selection -->
+        <div>
+          <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 block">Brush Color</label>
+          <div class="grid grid-cols-5 gap-2">
+            <button class="color-btn w-9 h-9 rounded-xl bg-cyan-400 border-2 border-white scale-105" data-color="#22d3ee"></button>
+            <button class="color-btn w-9 h-9 rounded-xl bg-indigo-500 border-2 border-transparent hover:scale-105" data-color="#6366f1"></button>
+            <button class="color-btn w-9 h-9 rounded-xl bg-emerald-400 border-2 border-transparent hover:scale-105" data-color="#34d399"></button>
+            <button class="color-btn w-9 h-9 rounded-xl bg-rose-500 border-2 border-transparent hover:scale-105" data-color="#f43f5e"></button>
+            <button class="color-btn w-9 h-9 rounded-xl bg-amber-400 border-2 border-transparent hover:scale-105" data-color="#fbbf24"></button>
+          </div>
+        </div>
+
+        <!-- Custom Color Picker -->
+        <div>
+          <label for="customColor" class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1 block">Custom Color</label>
+          <input type="color" id="customColor" value="#22d3ee" class="w-full h-10 bg-slate-950 rounded-lg cursor-pointer border border-slate-800 p-1">
+        </div>
+
+        <!-- Brush Thickness -->
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label for="brushSize" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Stroke Size</label>
+            <span id="brushSizeVal" class="text-xs font-mono text-cyan-400">8px</span>
+          </div>
+          <input type="range" id="brushSize" min="2" max="30" value="8" class="w-full accent-cyan-400 bg-slate-950 rounded-lg cursor-pointer">
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="space-y-2">
+        <button id="recognizeBtn" class="w-full py-3 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-cyan-500/25 transition active:scale-95 flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+          </svg>
+          Recognize Drawing
+        </button>
+
+        <button id="clearBtn" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-xl border border-slate-700/60 transition active:scale-95">
+          Clear Canvas
+        </button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Recognition Result Modal -->
+  <div id="resultModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl relative">
+      <h3 class="text-lg font-bold text-slate-100">Recognition Output</h3>
+      
+      <div class="py-4 bg-slate-950 rounded-xl border border-slate-800/80">
+        <div id="resultShape" class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400">---</div>
+        <div id="resultConfidence" class="text-xs font-mono text-slate-400 mt-1">Confidence: 0%</div>
+      </div>
+
+      <button id="closeModalBtn" class="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded-xl transition">
+        Close
+      </button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
